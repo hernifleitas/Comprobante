@@ -8,22 +8,73 @@
 
 const express = require('express');
 const router = express.Router();
+const http = require('http');
 const db = require('../database');
+
+/**
+ * Obtiene geolocalización por IP usando ip-api.com (HTTP, sin API key).
+ * El backend puede hacer HTTP sin problemas de mixed content.
+ */
+function geoLookupByIP(ip) {
+  return new Promise((resolve) => {
+    if (!ip) { resolve(null); return; }
+
+    const url = `http://ip-api.com/json/${ip}?fields=status,country,regionName,city,isp`;
+    http.get(url, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const geo = JSON.parse(data);
+          if (geo.status === 'success') {
+            resolve({
+              country: geo.country || null,
+              region: geo.regionName || null,
+              city: geo.city || null,
+              isp: geo.isp || null
+            });
+          } else {
+            resolve(null);
+          }
+        } catch {
+          resolve(null);
+        }
+      });
+    }).on('error', () => resolve(null));
+  });
+}
 
 /**
  * POST /api/visits
  * Registra una nueva visita en la base de datos.
  * Recibe un JSON con la información del dispositivo.
  */
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const {
+    let {
       ip, country, region, city, isp,
       browser, browserVersion, os, osVersion,
       deviceType, deviceBrand, deviceModel,
       screenResolution, language, timezone,
       connectionType, gpsLatitude, gpsLongitude
     } = req.body;
+
+    // Obtener IP del request si no viene en el body
+    if (!ip) {
+      ip = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket.remoteAddress || null;
+      if (ip && ip.includes(',')) ip = ip.split(',')[0].trim();
+    }
+
+    // Si no hay ubicación por GPS, buscar por IP en el backend
+    if (!gpsLatitude && !country && ip) {
+      const geo = await geoLookupByIP(ip);
+      if (geo) {
+        country = geo.country;
+        region = geo.region;
+        city = geo.city;
+        isp = geo.isp;
+      }
+    }
 
     // Preparar inserción
     const stmt = db.prepare(`

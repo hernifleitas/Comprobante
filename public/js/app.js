@@ -64,21 +64,8 @@ async function fetchIPAndGeoLocation() {
     const ipResponse = await fetch('https://api.ipify.org?format=json');
     const ipData = await ipResponse.json();
     deviceData.ip = ipData.ip;
-
-    // Obtener geolocalización por IP (gratuito, sin API key)
-    const geoResponse = await fetch(
-      `https://ip-api.com/json/${deviceData.ip}?fields=status,country,regionName,city,isp`
-    );
-    const geoData = await geoResponse.json();
-
-    if (geoData.status === 'success') {
-      deviceData.country = geoData.country || null;
-      deviceData.region = geoData.regionName || null;
-      deviceData.city = geoData.city || null;
-      deviceData.isp = geoData.isp || null;
-    }
   } catch (error) {
-    console.warn('Error al obtener IP/geolocalización:', error);
+    console.warn('Error al obtener IP:', error);
   }
 }
 
